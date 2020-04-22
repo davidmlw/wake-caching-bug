@@ -1,0 +1,9 @@
+global def run Unit =
+  def cmd = 'make', Nil
+
+  def makefile = source "{here}/Makefile"
+  def infiles = sources here `in.*\.txt`
+  def visible = makefile, infiles
+
+  def job = makePlan cmd visible | runJob
+  job.getJobOutputs
