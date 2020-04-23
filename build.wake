@@ -5,5 +5,40 @@ global def run Unit =
   def infiles = sources here `in.*\.txt`
   def visible = makefile, infiles
 
-  def job = makePlan cmd visible | runJob
+  def job =
+    makePlan cmd visible
+    | makePlanChain
+    | runPlanChain
+    | getPairSecond
   job.getJobOutputs
+
+tuple PlanChain =
+  Plan: Plan
+  Deps: List PlanChain
+
+global target runPlanChain chain =
+  def hash content = prim "hash"
+  def input = chain | getPlanChainPlan | getPlanVisible | hashPaths
+  def deps = chain | getPlanChainDeps | map runPlanChain | map getPairFirst
+  def icode = (input, deps) | hash
+  def job =
+    chain.getPlanChainPlan
+    | editPlanEnvironment ("PLANCHAIN_HASH_HACK={icode.format}", _)
+    | runJob
+  def status = job.getJobStatus.hash
+  def ocode = (icode, status, Nil) | hash
+  Pair ocode job
+
+global def makePlanChain plan = PlanChain plan Nil
+
+global target hashPaths paths = match paths
+  Nil = 0
+  _   =
+    def hash content = prim "hash"
+    def sorted = paths | sortBy (_.getPathName <* _.getPathName)
+    def cmd = "sha1sum", (map (_.getPathName) sorted)
+    makePlan cmd paths
+    | setPlanEcho Debug
+    | runJob
+    | getJobStdout
+    | hash
